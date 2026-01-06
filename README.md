@@ -4,7 +4,7 @@
 
 Braindump - dump your brain, not your productivity
 
-Braindump is a macOS command-line interface (CLI) and Model Context Protocol (MCP) server for Apple Notes and Reminders. It allows you to quickly manage your notes and tasks directly from the terminal or through AI agents.
+Braindump is a macOS command-line interface (CLI) and Model Context Protocol (MCP) server for Apple Notes and Reminders. It allows you to quickly manage your notes and tasks directly from the terminal or through AI agents. **Enhanced with hybrid search capabilities**: syncs Apple Notes to local SQLite database with FTS5 full-text search and NaturalLanguage embeddings for semantic similarity.
 
 ## Requirements
 
@@ -65,10 +65,25 @@ Create a new reminder:
 braindump reminders create --title "Buy groceries" --due "2026-01-05 18:00" --notes "Milk, Eggs, Bread" --priority 5
 ```
 
-Complete a reminder:
+Complete a reminder (supports flexible ID matching):
 ```bash
 braindump reminders complete <reminder-id>
+# Supports: index number (1, 2, 3...), UUID, UUID prefix (4+ chars), or fuzzy title match
 ```
+
+### Search Features
+
+**Sync notes to local database:**
+```bash
+braindump sync
+```
+Indexes all Apple Notes to local SQLite database with FTS5 full-text search and vector embeddings for semantic similarity.
+
+**Hybrid search over indexed notes:**
+```bash
+braindump search "meeting agenda" --limit 5
+```
+Uses Reciprocal Rank Fusion (RRF) algorithm to combine full-text search results with semantic similarity scores for superior relevance.
 
 ## MCP Server Setup
 
@@ -91,7 +106,7 @@ Add the following to your `claude_desktop_config.json`:
 
 ### Available MCP Tools
 
-The server exposes 13 tools for managing notes and reminders:
+The server exposes 14 tools for managing notes and reminders:
 
 1.  **notes_list**: List all notes. Optional parameter: `folder` (string) to filter by folder name.
 2.  **notes_get**: Get a note by ID. Required parameter: `id` (string).
@@ -106,6 +121,16 @@ The server exposes 13 tools for managing notes and reminders:
 11. **reminders_delete**: Delete a reminder by ID. Required parameter: `id` (string).
 12. **reminders_search**: Search reminders by title. Required parameter: `query` (string).
 13. **reminders_lists**: List all reminder lists with pending counts.
+14. **search_notes**: Hybrid search notes using FTS5 + semantic search. Run 'sync' first to index notes. Required: `query` (string). Optional: `limit` (int, default 10).
+
+## Architecture
+
+Braindump uses an actor-based architecture for safe concurrency:
+
+- **Services**: All business logic encapsulated in actors for thread-safe AppleScript execution
+- **Database**: SQLite with FTS5 virtual tables and vector embeddings for hybrid search
+- **Search**: Reciprocal Rank Fusion (RRF) combines full-text and semantic similarity
+- **MCP**: Model Context Protocol server exposing unified API for AI agents
 
 ## License
 

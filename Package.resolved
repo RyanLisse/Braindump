@@ -1,6 +1,15 @@
 {
-  "originHash" : "73be448108010983d433978413d996cb00c96db67df37a1d8b9d65015b72e31f",
+  "originHash" : "e88b028d8f1461211b27e19de5488ed9373ea532b8f2a41d9dcd8faaa8313804",
   "pins" : [
+    {
+      "identity" : "demark",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/steipete/demark",
+      "state" : {
+        "revision" : "9d12266c98f51099beec92e50483392869b12d77",
+        "version" : "1.1.0"
+      }
+    },
     {
       "identity" : "eventsource",
       "kind" : "remoteSourceControl",
@@ -8,6 +17,15 @@
       "state" : {
         "revision" : "ca2a9d90cbe49e09b92f4b6ebd922c03ebea51d0",
         "version" : "1.3.0"
+      }
+    },
+    {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift",
+      "state" : {
+        "revision" : "2cf6c756e1e5ef6901ebae16576a7e4e4b834622",
+        "version" : "6.29.3"
       }
     },
     {

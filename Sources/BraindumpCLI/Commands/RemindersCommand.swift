@@ -172,7 +172,7 @@ struct CompleteReminder: AsyncParsableCommand {
         abstract: "Mark a reminder as completed"
     )
     
-    @Argument(help: "Reminder ID")
+    @Argument(help: "Reminder ID, index (1, 2...), or partial title")
     var id: String
     
     @Flag(name: .shortAndLong, help: "Uncomplete instead of complete")
@@ -181,12 +181,16 @@ struct CompleteReminder: AsyncParsableCommand {
     func run() async throws {
         let service = RemindersService()
         
+        // Resolve ID first
+        let allReminders = try await service.listReminders(list: nil, includeCompleted: false)
+        let resolvedReminder = try IDResolver.resolve(id, from: allReminders)
+        
         if undo {
-            try await service.uncompleteReminder(id: id)
-            print("Reminder marked as incomplete.")
+            try await service.uncompleteReminder(id: resolvedReminder.id)
+            print("Reminder '\(resolvedReminder.title)' marked as incomplete.")
         } else {
-            try await service.completeReminder(id: id)
-            print("Reminder completed.")
+            try await service.completeReminder(id: resolvedReminder.id)
+            print("Reminder '\(resolvedReminder.title)' completed.")
         }
     }
 }
@@ -197,7 +201,7 @@ struct DeleteReminder: AsyncParsableCommand {
         abstract: "Delete a reminder"
     )
     
-    @Argument(help: "Reminder ID")
+    @Argument(help: "Reminder ID, index (1, 2...), or partial title")
     var id: String
     
     @Flag(name: .shortAndLong, help: "Skip confirmation")
@@ -206,18 +210,20 @@ struct DeleteReminder: AsyncParsableCommand {
     func run() async throws {
         let service = RemindersService()
         
+        // Resolve ID first
+        let allReminders = try await service.listReminders(list: nil, includeCompleted: false)
+        let resolvedReminder = try IDResolver.resolve(id, from: allReminders)
+        
         if !force {
-            if let reminder = try await service.getReminder(id: id) {
-                print("Delete reminder '\(reminder.title)'? [y/N] ", terminator: "")
-                guard let response = readLine()?.lowercased(), response == "y" else {
-                    print("Cancelled.")
-                    return
-                }
+            print("Delete reminder '\(resolvedReminder.title)'? [y/N] ", terminator: "")
+            guard let response = readLine()?.lowercased(), response == "y" else {
+                print("Cancelled.")
+                return
             }
         }
         
-        try await service.deleteReminder(id: id)
-        print("Reminder deleted.")
+        try await service.deleteReminder(id: resolvedReminder.id)
+        print("Reminder '\(resolvedReminder.title)' deleted.")
     }
 }
 

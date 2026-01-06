@@ -9,6 +9,8 @@ public struct Braindump: AsyncParsableCommand {
         subcommands: [
             Notes.self,
             Reminders.self,
+            Sync.self,
+            Search.self,
             MCP.self,
         ]
     )

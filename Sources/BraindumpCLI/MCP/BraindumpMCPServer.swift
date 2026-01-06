@@ -3,10 +3,22 @@ import MCP
 
 public actor BraindumpMCPServer {
     private var server: Server?
-    private let notesService = NotesService()
-    private let remindersService = RemindersService()
+    private let notesService: NotesService
+    private let remindersService: RemindersService
+    private let databaseService: DatabaseService
+    private let embeddingService: EmbeddingService
     
-    public init() {}
+    public init(
+        notesService: NotesService = NotesService(),
+        remindersService: RemindersService = RemindersService(),
+        databaseService: DatabaseService = DatabaseService(),
+        embeddingService: EmbeddingService = EmbeddingService()
+    ) {
+        self.notesService = notesService
+        self.remindersService = remindersService
+        self.databaseService = databaseService
+        self.embeddingService = embeddingService
+    }
     
     public func run() async throws {
         let transport = StdioTransport()
@@ -34,6 +46,7 @@ public actor BraindumpMCPServer {
         }
         
         try await server.start(transport: transport)
+        await server.waitUntilCompleted()
     }
     
     private func handleToolCall(_ params: CallTool.Parameters) async throws -> CallTool.Result {
@@ -67,6 +80,8 @@ public actor BraindumpMCPServer {
             return try await handleRemindersSearch(args)
         case "reminders_lists":
             return try await handleRemindersLists()
+        case "search_notes":
+            return try await handleSearchNotes(args)
         default:
             throw BraindumpMCPError.methodNotFound("Unknown tool: \(toolName)")
         }
@@ -242,6 +257,25 @@ public actor BraindumpMCPServer {
         return CallTool.Result(content: [.text(toJSON(lists))])
     }
     
+    private func handleSearchNotes(_ args: [String: Value]) async throws -> CallTool.Result {
+        guard case .string(let query) = args["query"] else {
+            throw BraindumpMCPError.invalidParams("Missing 'query' parameter")
+        }
+        
+        var limit = 10
+        if case .int(let l) = args["limit"] {
+            limit = l
+        }
+        
+        let searchService = HybridSearchService(
+            databaseService: databaseService,
+            embeddingService: embeddingService
+        )
+        
+        let results = try await searchService.search(query: query, limit: limit)
+        return CallTool.Result(content: [.text(toJSON(results))])
+    }
+    
     private func toJSON<T: Codable>(_ value: T) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -255,36 +289,147 @@ public actor BraindumpMCPServer {
 }
 
 extension BraindumpMCPServer {
-    public static let toolDefinitions: [ToolDefinition] = [
-        ToolDefinition(name: "notes_list", description: "List all notes. Optional parameter: folder (string) to filter by folder name."),
-        ToolDefinition(name: "notes_get", description: "Get a note by ID. Required parameter: id (string)."),
-        ToolDefinition(name: "notes_create", description: "Create a new note. Required: title (string). Optional: body (string), folder (string, default 'Notes')."),
-        ToolDefinition(name: "notes_search", description: "Search notes by title or content. Required parameter: query (string)."),
-        ToolDefinition(name: "notes_delete", description: "Delete a note by ID. Required parameter: id (string)."),
-        ToolDefinition(name: "notes_folders", description: "List all note folders with note counts."),
-        ToolDefinition(name: "reminders_list", description: "List reminders. Optional: list (string) to filter by list name, include_completed (boolean, default false)."),
-        ToolDefinition(name: "reminders_get", description: "Get a reminder by ID. Required parameter: id (string)."),
-        ToolDefinition(name: "reminders_create", description: "Create a new reminder. Required: title (string). Optional: list (string), due_date (ISO8601 string), notes (string), priority (int 0-9)."),
-        ToolDefinition(name: "reminders_complete", description: "Mark a reminder as completed. Required: id (string). Optional: undo (boolean) to uncomplete."),
-        ToolDefinition(name: "reminders_delete", description: "Delete a reminder by ID. Required parameter: id (string)."),
-        ToolDefinition(name: "reminders_search", description: "Search reminders by title. Required parameter: query (string)."),
-        ToolDefinition(name: "reminders_lists", description: "List all reminder lists with pending counts."),
-    ]
+    private static func jsonSchema(properties: [String: Value], required: [String] = []) -> Value {
+        var schema: [String: Value] = [
+            "type": .string("object"),
+            "properties": .object(properties)
+        ]
+        if !required.isEmpty {
+            schema["required"] = .array(required.map { .string($0) })
+        }
+        return .object(schema)
+    }
+    
+    private static func stringProp(_ desc: String) -> Value {
+        .object(["type": .string("string"), "description": .string(desc)])
+    }
+    
+    private static func boolProp(_ desc: String) -> Value {
+        .object(["type": .string("boolean"), "description": .string(desc)])
+    }
+    
+    private static func intProp(_ desc: String) -> Value {
+        .object(["type": .string("integer"), "description": .string(desc)])
+    }
     
     static var mcpTools: [Tool] {
-        toolDefinitions.map { def in
+        [
             Tool(
-                name: def.name,
-                description: def.description,
-                inputSchema: .object([:])
-            )
-        }
+                name: "notes_list",
+                description: "List all notes. Optional: folder to filter.",
+                inputSchema: jsonSchema(properties: [
+                    "folder": stringProp("Filter by folder name")
+                ])
+            ),
+            Tool(
+                name: "notes_get",
+                description: "Get a note by ID.",
+                inputSchema: jsonSchema(properties: [
+                    "id": stringProp("Note ID")
+                ], required: ["id"])
+            ),
+            Tool(
+                name: "notes_create",
+                description: "Create a new note.",
+                inputSchema: jsonSchema(properties: [
+                    "title": stringProp("Note title"),
+                    "body": stringProp("Note body content"),
+                    "folder": stringProp("Folder name (default: Notes)")
+                ], required: ["title"])
+            ),
+            Tool(
+                name: "notes_search",
+                description: "Search notes by title or content.",
+                inputSchema: jsonSchema(properties: [
+                    "query": stringProp("Search query")
+                ], required: ["query"])
+            ),
+            Tool(
+                name: "notes_delete",
+                description: "Delete a note by ID.",
+                inputSchema: jsonSchema(properties: [
+                    "id": stringProp("Note ID")
+                ], required: ["id"])
+            ),
+            Tool(
+                name: "notes_folders",
+                description: "List all note folders with note counts.",
+                inputSchema: jsonSchema(properties: [:])
+            ),
+            Tool(
+                name: "reminders_list",
+                description: "List reminders. Optional: filter by list.",
+                inputSchema: jsonSchema(properties: [
+                    "list": stringProp("Filter by list name"),
+                    "include_completed": boolProp("Include completed reminders")
+                ])
+            ),
+            Tool(
+                name: "reminders_get",
+                description: "Get a reminder by ID.",
+                inputSchema: jsonSchema(properties: [
+                    "id": stringProp("Reminder ID")
+                ], required: ["id"])
+            ),
+            Tool(
+                name: "reminders_create",
+                description: "Create a new reminder.",
+                inputSchema: jsonSchema(properties: [
+                    "title": stringProp("Reminder title"),
+                    "list": stringProp("List name (default: Reminders)"),
+                    "due_date": stringProp("Due date in ISO8601 format"),
+                    "notes": stringProp("Additional notes"),
+                    "priority": intProp("Priority 0-9")
+                ], required: ["title"])
+            ),
+            Tool(
+                name: "reminders_complete",
+                description: "Mark a reminder as completed.",
+                inputSchema: jsonSchema(properties: [
+                    "id": stringProp("Reminder ID"),
+                    "undo": boolProp("Undo completion")
+                ], required: ["id"])
+            ),
+            Tool(
+                name: "reminders_delete",
+                description: "Delete a reminder by ID.",
+                inputSchema: jsonSchema(properties: [
+                    "id": stringProp("Reminder ID")
+                ], required: ["id"])
+            ),
+            Tool(
+                name: "reminders_search",
+                description: "Search reminders by title.",
+                inputSchema: jsonSchema(properties: [
+                    "query": stringProp("Search query")
+                ], required: ["query"])
+            ),
+            Tool(
+                name: "reminders_lists",
+                description: "List all reminder lists with pending counts.",
+                inputSchema: jsonSchema(properties: [:])
+            ),
+            Tool(
+                name: "search_notes",
+                description: "Search notes using hybrid FTS + semantic search. Run 'sync' first to index notes.",
+                inputSchema: jsonSchema(properties: [
+                    "query": stringProp("Search query"),
+                    "limit": intProp("Maximum results to return (default: 10)")
+                ], required: ["query"])
+            ),
+        ]
     }
 }
 
-public struct ToolDefinition: Codable, Sendable {
+public struct ToolDefinition: Codable {
     public let name: String
     public let description: String
+}
+
+extension BraindumpMCPServer {
+    public static var toolDefinitions: [ToolDefinition] {
+        mcpTools.map { ToolDefinition(name: $0.name, description: $0.description ?? "") }
+    }
 }
 
 enum BraindumpMCPError: Error, LocalizedError {

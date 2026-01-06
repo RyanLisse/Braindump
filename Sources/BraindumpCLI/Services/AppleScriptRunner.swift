@@ -12,7 +12,7 @@ public enum AppleScriptError: Error, LocalizedError {
     }
 }
 
-public struct AppleScriptRunner: Sendable {
+public struct AppleScriptRunner: AppleScriptExecutorProtocol, Sendable {
     public init() {}
     
     public func run(_ script: String) async throws -> String {

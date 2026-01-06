@@ -28,10 +28,12 @@ public struct NoteFolder: Codable, Sendable {
     }
 }
 
-public actor NotesService {
-    private let runner = AppleScriptRunner()
+public actor NotesService: NotesServiceProtocol {
+    private let executor: any AppleScriptExecutorProtocol
     
-    public init() {}
+    public init(executor: any AppleScriptExecutorProtocol = AppleScriptRunner()) {
+        self.executor = executor
+    }
     
     public func listFolders() async throws -> [NoteFolder] {
         let script = """
@@ -46,7 +48,7 @@ public actor NotesService {
         end tell
         """
         
-        let output = try await runner.run(script)
+        let output = try await executor.run(script)
         return output.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: "|")
             guard parts.count >= 2,
@@ -67,22 +69,42 @@ public actor NotesService {
                     repeat with n in notes of f
                         set noteID to id of n
                         set noteName to name of n
-                        set output to output & noteID & "|" & folderName & "|" & noteName & "\\n"
+                        set modDate to modification date of n
+                        set modDateStr to (year of modDate as string) & "-" & (my padZero(month of modDate as integer)) & "-" & (my padZero(day of modDate)) & "T" & (my padZero(hours of modDate)) & ":" & (my padZero(minutes of modDate)) & ":00"
+                        set output to output & noteID & "|" & folderName & "|" & noteName & "|" & modDateStr & "\\n"
                     end repeat
                 end if
             end repeat
             return output
         end tell
+        
+        on padZero(n)
+            if n < 10 then
+                return "0" & (n as string)
+            else
+                return n as string
+            end if
+        end padZero
         """
         
-        let output = try await runner.run(script)
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime]
+        
+        let output = try await executor.run(script)
         return output.split(separator: "\n").compactMap { line in
-            let parts = line.split(separator: "|", maxSplits: 2)
+            let parts = line.split(separator: "|", maxSplits: 3)
             guard parts.count >= 3 else { return nil }
+            
+            var modDate: Date? = nil
+            if parts.count >= 4 {
+                modDate = dateFormatter.date(from: String(parts[3]) + "Z")
+            }
+            
             return Note(
                 id: String(parts[0]),
                 title: String(parts[2]),
-                folder: String(parts[1])
+                folder: String(parts[1]),
+                modificationDate: modDate
             )
         }
     }
@@ -99,7 +121,7 @@ public actor NotesService {
         end tell
         """
         
-        let output = try await runner.run(script)
+        let output = try await executor.run(script)
         let parts = output.split(separator: "|", maxSplits: 3)
         guard parts.count >= 4 else { return nil }
         
@@ -126,7 +148,7 @@ public actor NotesService {
         end tell
         """
         
-        let output = try await runner.run(script)
+        let output = try await executor.run(script)
         return output.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: "|", maxSplits: 2)
             guard parts.count >= 3 else { return nil }
@@ -152,7 +174,7 @@ public actor NotesService {
         end tell
         """
         
-        return try await runner.run(script)
+        return try await executor.run(script)
     }
     
     public func updateNote(id: String, body: String) async throws {
@@ -165,7 +187,7 @@ public actor NotesService {
         end tell
         """
         
-        _ = try await runner.run(script)
+        _ = try await executor.run(script)
     }
     
     public func deleteNote(id: String) async throws {
@@ -176,7 +198,7 @@ public actor NotesService {
         end tell
         """
         
-        _ = try await runner.run(script)
+        _ = try await executor.run(script)
     }
     
     public func moveNote(id: String, toFolder: String) async throws {
@@ -191,7 +213,7 @@ public actor NotesService {
         end tell
         """
         
-        _ = try await runner.run(script)
+        _ = try await executor.run(script)
     }
     
     public func createFolder(name: String) async throws {
@@ -201,6 +223,6 @@ public actor NotesService {
         end tell
         """
         
-        _ = try await runner.run(script)
+        _ = try await executor.run(script)
     }
 }

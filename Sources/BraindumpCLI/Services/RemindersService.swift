@@ -30,11 +30,12 @@ public struct ReminderList: Codable, Sendable {
     }
 }
 
-public actor RemindersService {
-    private let runner = AppleScriptRunner()
+public actor RemindersService: RemindersServiceProtocol {
+    private let executor: any AppleScriptExecutorProtocol
     private let dateFormatter: ISO8601DateFormatter
     
-    public init() {
+    public init(executor: any AppleScriptExecutorProtocol = AppleScriptRunner()) {
+        self.executor = executor
         dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime]
     }
@@ -57,7 +58,7 @@ public actor RemindersService {
         end tell
         """
         
-        let output = try await runner.run(script)
+        let output = try await executor.run(script)
         return output.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: "|")
             guard parts.count >= 2,
@@ -103,7 +104,7 @@ public actor RemindersService {
         end padZero
         """
         
-        let output = try await runner.run(script)
+        let output = try await executor.run(script)
         return output.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: "|", maxSplits: 5)
             guard parts.count >= 6 else { return nil }
@@ -157,7 +158,7 @@ public actor RemindersService {
         end padZero
         """
         
-        let output = try await runner.run(script)
+        let output = try await executor.run(script)
         let parts = output.split(separator: "|", maxSplits: 6)
         guard parts.count >= 6 else { return nil }
         
@@ -208,7 +209,7 @@ public actor RemindersService {
         end tell
         """
         
-        return try await runner.run(script)
+        return try await executor.run(script)
     }
     
     public func completeReminder(id: String) async throws {
@@ -219,7 +220,7 @@ public actor RemindersService {
         end tell
         """
         
-        _ = try await runner.run(script)
+        _ = try await executor.run(script)
     }
     
     public func uncompleteReminder(id: String) async throws {
@@ -230,7 +231,7 @@ public actor RemindersService {
         end tell
         """
         
-        _ = try await runner.run(script)
+        _ = try await executor.run(script)
     }
     
     public func deleteReminder(id: String) async throws {
@@ -241,7 +242,7 @@ public actor RemindersService {
         end tell
         """
         
-        _ = try await runner.run(script)
+        _ = try await executor.run(script)
     }
     
     public func updateReminder(id: String, title: String? = nil, dueDate: Date? = nil, notes: String? = nil, priority: Int? = nil) async throws {
@@ -282,7 +283,7 @@ public actor RemindersService {
         end tell
         """
         
-        _ = try await runner.run(script)
+        _ = try await executor.run(script)
     }
     
     public func searchReminders(query: String) async throws -> [Reminder] {
@@ -320,7 +321,7 @@ public actor RemindersService {
         end padZero
         """
         
-        let output = try await runner.run(script)
+        let output = try await executor.run(script)
         return output.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: "|", maxSplits: 5)
             guard parts.count >= 6 else { return nil }
