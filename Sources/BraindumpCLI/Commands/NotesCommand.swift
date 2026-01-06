@@ -12,8 +12,7 @@ struct Notes: AsyncParsableCommand {
             SearchNotes.self,
             DeleteNote.self,
             Folders.self,
-        ],
-        defaultSubcommand: ListNotes.self
+        ]
     )
 }
 

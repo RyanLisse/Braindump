@@ -36,6 +36,29 @@ struct NotesServiceTests {
         #expect(notes[1].folder == "Work")
     }
     
+    @Test("listNotes parses modification date correctly")
+    func listNotesParsesModificationDate() async throws {
+        let mockExecutor = MockAppleScriptExecutor()
+        // Mock output with date: 2026-01-06T12:00:00 (ISO8601-like)
+        await mockExecutor.setMockResult("id123|Notes|My Note|2026-01-06T12:00:00\n")
+        
+        let service = NotesService(executor: mockExecutor)
+        let notes = try await service.listNotes(folder: nil)
+        
+        #expect(notes.count == 1)
+        #expect(notes[0].modificationDate != nil)
+        
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = notes[0].modificationDate!
+        let components = calendar.dateComponents([.year, .month, .day, .hour], from: date)
+        
+        #expect(components.year == 2026)
+        #expect(components.month == 1)
+        #expect(components.day == 6)
+        #expect(components.hour == 12)
+    }
+    
     @Test("getNote parses full note with body")
     func getNoteParsesFullOutput() async throws {
         let mockExecutor = MockAppleScriptExecutor()

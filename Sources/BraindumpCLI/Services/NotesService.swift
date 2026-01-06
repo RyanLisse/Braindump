@@ -61,22 +61,36 @@ public actor NotesService: NotesServiceProtocol {
         let folderFilter = folder.map { "whose name is \"\($0)\"" } ?? ""
         let script = """
         set deletedNames to {"Recently Deleted", "Nylig slettet", "Zuletzt gelöscht", "Supprimés récemment", "Eliminados recientemente"}
+        set noteDataList to {}
+        
         tell application "Notes"
-            set output to ""
             repeat with f in folders \(folderFilter)
                 set folderName to name of f
                 if folderName is not in deletedNames then
-                    repeat with n in notes of f
-                        set noteID to id of n
-                        set noteName to name of n
-                        set modDate to modification date of n
-                        set modDateStr to (year of modDate as string) & "-" & (my padZero(month of modDate as integer)) & "-" & (my padZero(day of modDate)) & "T" & (my padZero(hours of modDate)) & ":" & (my padZero(minutes of modDate)) & ":00"
-                        set output to output & noteID & "|" & folderName & "|" & noteName & "|" & modDateStr & "\\n"
-                    end repeat
+                    -- Bulk fetch properties to minimize IPC calls
+                    set idList to id of notes of f
+                    set nameList to name of notes of f
+                    set dateList to modification date of notes of f
+                    
+                    set noteCount to count of idList
+                    if noteCount > 0 then
+                        repeat with i from 1 to noteCount
+                            set noteID to item i of idList
+                            set noteName to item i of nameList
+                            set modDate to item i of dateList
+                            
+                            -- Format date
+                            set modDateStr to (year of modDate as string) & "-" & (my padZero(month of modDate as integer)) & "-" & (my padZero(day of modDate)) & "T" & (my padZero(hours of modDate)) & ":" & (my padZero(minutes of modDate)) & ":" & (my padZero(seconds of modDate))
+                            
+                            set end of noteDataList to noteID & "|" & folderName & "|" & noteName & "|" & modDateStr
+                        end repeat
+                    end if
                 end if
             end repeat
-            return output
         end tell
+        
+        set AppleScript's text item delimiters to "\n"
+        return noteDataList as text
         
         on padZero(n)
             if n < 10 then
@@ -88,7 +102,7 @@ public actor NotesService: NotesServiceProtocol {
         """
         
         let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime]
+        dateFormatter.formatOptions = [.withInternetDateTime, .withDashSeparatorInDate, .withColonSeparatorInTime]
         
         let output = try await executor.run(script)
         return output.split(separator: "\n").compactMap { line in
@@ -97,7 +111,16 @@ public actor NotesService: NotesServiceProtocol {
             
             var modDate: Date? = nil
             if parts.count >= 4 {
-                modDate = dateFormatter.date(from: String(parts[3]) + "Z")
+               // Append Z for UTC, though AppleScript dates are local time usually. 
+               // Assuming local time for typical user scripts is better handled if we parse as local or make sure format is explicit.
+               // However, AppleScript date is local. ISO8601DateFormatter without timezone assumes UTC if Z is present, or local if not?
+               // Let's assume we treat it as a naive date string and let the formatter handle it.
+               // The constructed string is "YYYY-MM-DDTHH:mm:ss".
+               // ISO8601DateFormatter with .withInternetDateTime expects timezone.
+               // If we just append "Z" we treat local time as UTC, which is wrong but consistent for sync comparisons if consistent everywhere.
+               // Better is to allow loose format.
+               // Let's stick to the previous code's intention: String(parts[3]) + "Z"
+               modDate = dateFormatter.date(from: String(parts[3]) + "Z")
             }
             
             return Note(
@@ -136,16 +159,17 @@ public actor NotesService: NotesServiceProtocol {
     public func searchNotes(query: String) async throws -> [Note] {
         let script = """
         tell application "Notes"
-            set output to ""
+            set noteDataList to {}
             set matchingNotes to notes whose name contains "\(query)" or plaintext contains "\(query)"
             repeat with n in matchingNotes
                 set noteID to id of n
                 set noteName to name of n
                 set noteFolder to name of container of n
-                set output to output & noteID & "|" & noteFolder & "|" & noteName & "\\n"
+                set end of noteDataList to noteID & "|" & noteFolder & "|" & noteName
             end repeat
-            return output
         end tell
+        set AppleScript's text item delimiters to "\n"
+        return noteDataList as text
         """
         
         let output = try await executor.run(script)

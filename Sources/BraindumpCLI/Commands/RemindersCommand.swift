@@ -13,8 +13,7 @@ struct Reminders: AsyncParsableCommand {
             DeleteReminder.self,
             SearchReminders.self,
             Lists.self,
-        ],
-        defaultSubcommand: ListReminders.self
+        ]
     )
 }
 
