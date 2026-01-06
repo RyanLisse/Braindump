@@ -23,16 +23,13 @@ struct Sync: AsyncParsableCommand {
             embeddingService: embeddingService
         )
         
-        if !json {
-            print("Syncing notes to local index...")
+        let result = try await Spinner.withSpinner("Syncing notes", isEnabled: !json) {
+            try await syncService.sync()
         }
-        
-        let result = try await syncService.sync()
         
         if json {
             let output: [String: Any] = [
                 "processed": result.processed,
-                "skipped": result.skipped,
                 "errors": result.errors
             ]
             let data = try JSONSerialization.data(withJSONObject: output, options: .prettyPrinted)
@@ -40,7 +37,6 @@ struct Sync: AsyncParsableCommand {
         } else {
             print("\nSync complete:")
             print("  Processed: \(result.processed)")
-            print("  Skipped (unchanged): \(result.skipped)")
             print("  Errors: \(result.errors)")
         }
     }

@@ -25,7 +25,9 @@ struct Search: AsyncParsableCommand {
             embeddingService: embeddingService
         )
         
-        let results = try await searchService.search(query: query, limit: limit)
+        let results = try await Spinner.withSpinner("Searching local index", isEnabled: !json) {
+            try await searchService.search(query: query, limit: limit)
+        }
         
         if json {
             let encoder = JSONEncoder()

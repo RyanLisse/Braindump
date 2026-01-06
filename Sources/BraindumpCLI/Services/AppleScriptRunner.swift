@@ -28,12 +28,13 @@ public struct AppleScriptRunner: AppleScriptExecutorProtocol, Sendable {
 
             try process.run()
 
-            let outputData = try await outputPipe.fileHandleForReading.readDataToEndOfFile()
-            let errorData = try await errorPipe.fileHandleForReading.readDataToEndOfFile()
+            async let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            async let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
 
+            let result = try await (outputData, errorData)
             process.waitUntilExit()
 
-            return (process.terminationStatus, outputData, errorData)
+            return (process.terminationStatus, result.0, result.1)
         }
 
         let (status, outputData, errorData) = try await task.value

@@ -10,4 +10,5 @@ public protocol NotesServiceProtocol: Sendable {
     func deleteNote(id: String) async throws
     func moveNote(id: String, toFolder: String) async throws
     func createFolder(name: String) async throws
+    func fetchChangedNotes(since: Date) async throws -> [Note]
 }

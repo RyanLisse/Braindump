@@ -34,7 +34,9 @@ struct ListReminders: AsyncParsableCommand {
     
     func run() async throws {
         let service = RemindersService()
-        let reminders = try await service.listReminders(list: list, includeCompleted: all)
+        let reminders = try await Spinner.withSpinner("Listing reminders", isEnabled: !json) {
+            try await service.listReminders(list: list, includeCompleted: all)
+        }
         
         if json {
             let encoder = JSONEncoder()
@@ -79,7 +81,10 @@ struct GetReminder: AsyncParsableCommand {
     
     func run() async throws {
         let service = RemindersService()
-        guard let reminder = try await service.getReminder(id: id) else {
+        let reminder = try await Spinner.withSpinner("Fetching reminder", isEnabled: !json) {
+            try await service.getReminder(id: id)
+        }
+        guard let reminder = reminder else {
             print("Reminder not found.")
             return
         }
@@ -137,7 +142,7 @@ struct CreateReminder: AsyncParsableCommand {
     var json: Bool = false
     
     func run() async throws {
-        var dueDate: Date? = nil
+        let dueDate: Date?
         if let dueStr = due {
             let formatter = DateFormatter()
             if dueStr.contains(":") {
@@ -146,16 +151,20 @@ struct CreateReminder: AsyncParsableCommand {
                 formatter.dateFormat = "yyyy-MM-dd"
             }
             dueDate = formatter.date(from: dueStr)
+        } else {
+            dueDate = nil
         }
         
         let service = RemindersService()
-        let reminderId = try await service.createReminder(
-            title: title,
-            list: list,
-            dueDate: dueDate,
-            notes: notes,
-            priority: priority
-        )
+        let reminderId = try await Spinner.withSpinner("Creating reminder", isEnabled: !json) {
+            try await service.createReminder(
+                title: title,
+                list: list,
+                dueDate: dueDate,
+                notes: notes,
+                priority: priority
+            )
+        }
         
         if json {
             print("{\"success\": true, \"id\": \"\(reminderId)\"}")
@@ -181,7 +190,9 @@ struct CompleteReminder: AsyncParsableCommand {
         let service = RemindersService()
         
         // Resolve ID first
-        let allReminders = try await service.listReminders(list: nil, includeCompleted: false)
+        let allReminders = try await Spinner.withSpinner("Resolving reminder", isEnabled: true) {
+            try await service.listReminders(list: nil, includeCompleted: false)
+        }
         let resolvedReminder = try IDResolver.resolve(id, from: allReminders)
         
         if undo {
@@ -210,7 +221,9 @@ struct DeleteReminder: AsyncParsableCommand {
         let service = RemindersService()
         
         // Resolve ID first
-        let allReminders = try await service.listReminders(list: nil, includeCompleted: false)
+        let allReminders = try await Spinner.withSpinner("Resolving reminder", isEnabled: true) {
+            try await service.listReminders(list: nil, includeCompleted: false)
+        }
         let resolvedReminder = try IDResolver.resolve(id, from: allReminders)
         
         if !force {
@@ -240,7 +253,9 @@ struct SearchReminders: AsyncParsableCommand {
     
     func run() async throws {
         let service = RemindersService()
-        let reminders = try await service.searchReminders(query: query)
+        let reminders = try await Spinner.withSpinner("Searching reminders", isEnabled: !json) {
+            try await service.searchReminders(query: query)
+        }
         
         if json {
             let encoder = JSONEncoder()
@@ -273,7 +288,9 @@ struct Lists: AsyncParsableCommand {
     
     func run() async throws {
         let service = RemindersService()
-        let lists = try await service.listLists()
+        let lists = try await Spinner.withSpinner("Listing lists", isEnabled: !json) {
+            try await service.listLists()
+        }
         
         if json {
             let encoder = JSONEncoder()

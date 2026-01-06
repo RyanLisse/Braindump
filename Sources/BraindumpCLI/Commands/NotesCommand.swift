@@ -30,7 +30,9 @@ struct ListNotes: AsyncParsableCommand {
     
     func run() async throws {
         let service = NotesService()
-        let notes = try await service.listNotes(folder: folder)
+        let notes = try await Spinner.withSpinner("Listing notes", isEnabled: !json) {
+            try await service.listNotes(folder: folder)
+        }
         
         if json {
             let encoder = JSONEncoder()
@@ -65,7 +67,10 @@ struct GetNote: AsyncParsableCommand {
     
     func run() async throws {
         let service = NotesService()
-        guard let note = try await service.getNote(id: id) else {
+        let note = try await Spinner.withSpinner("Fetching note", isEnabled: !json) {
+            try await service.getNote(id: id)
+        }
+        guard let note = note else {
             print("Note not found.")
             return
         }
@@ -107,7 +112,9 @@ struct CreateNote: AsyncParsableCommand {
     
     func run() async throws {
         let service = NotesService()
-        let noteId = try await service.createNote(title: title, body: body, folder: folder)
+        let noteId = try await Spinner.withSpinner("Creating note", isEnabled: !json) {
+            try await service.createNote(title: title, body: body, folder: folder)
+        }
         
         if json {
             print("{\"success\": true, \"id\": \"\(noteId)\"}")
@@ -131,7 +138,9 @@ struct SearchNotes: AsyncParsableCommand {
     
     func run() async throws {
         let service = NotesService()
-        let notes = try await service.searchNotes(query: query)
+        let notes = try await Spinner.withSpinner("Searching notes", isEnabled: !json) {
+            try await service.searchNotes(query: query)
+        }
         
         if json {
             let encoder = JSONEncoder()
@@ -192,7 +201,9 @@ struct Folders: AsyncParsableCommand {
     
     func run() async throws {
         let service = NotesService()
-        let folders = try await service.listFolders()
+        let folders = try await Spinner.withSpinner("Listing folders", isEnabled: !json) {
+            try await service.listFolders()
+        }
         
         if json {
             let encoder = JSONEncoder()
