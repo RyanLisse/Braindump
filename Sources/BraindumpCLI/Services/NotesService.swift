@@ -161,12 +161,106 @@ public actor NotesService: NotesServiceProtocol {
         tell application "Notes"
             set noteDataList to {}
             set matchingNotes to notes whose name contains "\(query)" or plaintext contains "\(query)"
-            repeat with n in matchingNotes
-                set noteID to id of n
-                set noteName to name of n
-                set noteFolder to name of container of n
-                set end of noteDataList to noteID & "|" & noteFolder & "|" & noteName
-            end repeat
+            
+            -- Bulk fetch properties
+            set idList to id of matchingNotes
+            set nameList to name of matchingNotes
+            -- Container name fetching in bulk might be tricky if some fail?
+            -- "name of container of matchingNotes" -> returns a list?
+            -- If one fails, does the whole list fail?
+            -- AppleScript usually fails the whole command if one item fails.
+            -- So we might have to be careful.
+            -- However, "container" property of a note usually exists unless it's weird.
+            -- But previously "container of note" failed for deleted notes.
+            -- Deleted notes are in "Recently Deleted" folder.
+            -- "notes" reference includes all notes?
+            -- Maybe "notes whose ... and name of container is not ..."
+            -- But "name of container" is expensive to check in filter?
+            
+            -- Let's try iterating, but without IPC for everything?
+            -- No, loop in AppleScript is slow for thousands.
+            -- Bulk fetch is best.
+            -- If we can filter out deleted notes first efficiently?
+            
+            -- "notes" usually refers to notes in the default account?
+            -- Actually "notes" of application refers to ALL notes.
+            
+            -- Let's try to get container names in bulk. If it fails, we fall back to loop?
+            -- Or we can try getting properties for all matchingNotes.
+            
+            -- Safe approach for bulk fetch with potential errors:
+            -- Not easily possible in vanilla AppleScript without loop.
+            
+            -- Alternative: Filter non-deleted notes first.
+            -- "notes whose (name contains X or plaintext contains X) and (container's name is not "Recently Deleted")" ?
+            -- AppleScript "container" property is valid in filter?
+            
+            -- Let's try to filter.
+            try
+                set validNotes to (matchingNotes whose name of container is not "Recently Deleted" and name of container is not "Nylig slettet" and name of container is not "Zuletzt gelöscht" and name of container is not "Supprimés récemment" and name of container is not "Eliminados recientemente")
+                
+                -- Now bulk fetch from validNotes
+                set idList to id of validNotes
+                set nameList to name of validNotes
+                set containerList to name of container of validNotes
+                
+                set noteCount to count of idList
+                repeat with i from 1 to noteCount
+                    set noteID to item i of idList
+                    set noteName to item i of nameList
+                    set noteFolder to item i of containerList
+                    
+                    set end of noteDataList to noteID & "|" & noteFolder & "|" & noteName
+                end repeat
+            on error
+               -- If bulk filter/fetch fails, fallback to slow loop or return what we can?
+               -- It probably failed because "name of container" failed for some note.
+               -- We'll return just IDs and names, and "Unknown" folder?
+               -- Or just use the slow loop but optimized (only fetching needed properties)?
+               
+               -- Let's use the slow loop but ONLY if bulk fails.
+               -- But actually, the loop I had before was hanging.
+               
+               -- Compromise: Fetch ID and Name in bulk (usually safe). Fetch Container individually?
+               -- Fetching Container individually for 1000 notes is 1000 IPC calls? No, inside "tell app", it's 1000 internal calls?
+               -- "tell application ... repeat ... end tell" sends the WHOLE script to the app. 
+               -- The loop runs INSIDE the app process.
+               -- So why was it slow/hanging?
+               -- Because creating the string "output" repeatedly is O(N^2).
+               -- "set output to output & ..." is slow.
+               -- I already switched to "set end of noteDataList to ...".
+               -- So the loop SHOULD be fast IF run inside the app.
+               
+               -- My previous fix for listNotes used "set end of noteDataList".
+               -- My searchNotes implementation (before this edit) ALSO used "set end of noteDataList".
+               -- But I added `try ... end try` in the loop.
+               -- The hang happened even with that?
+               
+               -- Wait, the hang I saw in Step 223 was with the `try` block added.
+               -- "Twitter" query.
+               -- If many notes, the loop takes time.
+               -- Is it the `try` block overhead?
+               
+               -- Let's try bulk fetch of just ID and Name.
+               set idList to id of matchingNotes
+               set nameList to name of matchingNotes
+               
+               -- We can avoid fetching container if it's risky?
+               -- But the UI shows folder.
+               
+               set noteCount to count of idList
+                repeat with i from 1 to noteCount
+                    set noteID to item i of idList
+                    set noteName to item i of nameList
+                    
+                    set noteFolder to "Unknown"
+                    try
+                        set noteFolder to name of container of (item i of matchingNotes)
+                    end try
+                    
+                    set end of noteDataList to noteID & "|" & noteFolder & "|" & noteName
+                end repeat
+            end try
         end tell
         set AppleScript's text item delimiters to "\n"
         return noteDataList as text

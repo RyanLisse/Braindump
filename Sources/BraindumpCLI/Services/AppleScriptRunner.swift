@@ -20,32 +20,29 @@ public struct AppleScriptRunner: AppleScriptExecutorProtocol, Sendable {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
             process.arguments = ["-e", script]
-            
+
             let outputPipe = Pipe()
             let errorPipe = Pipe()
             process.standardOutput = outputPipe
             process.standardError = errorPipe
-            
+
             try process.run()
-            
-            async let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            async let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            
+
+            let outputData = try await outputPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorData = try await errorPipe.fileHandleForReading.readDataToEndOfFile()
+
             process.waitUntilExit()
-            
-            let output = try await outputData
-            let error = try await errorData
-            
-            return (process.terminationStatus, output, error)
+
+            return (process.terminationStatus, outputData, errorData)
         }
-        
+
         let (status, outputData, errorData) = try await task.value
-            
+
         if status != 0 {
             let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
             throw AppleScriptError.executionFailed(errorMessage)
         }
-        
+
         return String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
     

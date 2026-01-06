@@ -73,27 +73,57 @@ public actor RemindersService: RemindersServiceProtocol {
         
         let script = """
         tell application "Reminders"
-            set output to ""
-            set rems to reminders \(listFilter)
-            repeat with r in rems
-                if \(completedCheck) then
-                    set remID to id of r
-                    set remName to name of r
-                    set remList to name of container of r
-                    set isComp to completed of r
-                    set remPriority to priority of r
+            set reminderDataList to {}
+            
+            -- Construct the reference based on filters
+            if "\(includeCompleted)" is "false" then
+                if "\(listFilter)" is "" then
+                    set targetReminders to reminders whose completed is false
+                else
+                    -- listFilter contains 'of list "Name"'
+                    -- We need to splice it: reminders of list "Name" whose completed is false
+                    -- But AppleScript syntax is: reminders of list "Name" whose completed is false
+                    -- My listFilter variable includes "of list ...".
+                    -- So I can just do: reminders \(listFilter) whose completed is false
+                    set targetReminders to reminders \(listFilter) whose completed is false
+                end if
+            else
+                set targetReminders to reminders \(listFilter)
+            end if
+            
+            if (count of targetReminders) > 0 then
+                set idList to id of targetReminders
+                set nameList to name of targetReminders
+                set listList to name of container of targetReminders
+                set completedList to completed of targetReminders
+                set priorityList to priority of targetReminders
+                -- due date list might contain 'missing value', which is tricky in lists but handleable
+                set dateList to due date of targetReminders
+                
+                set remCount to count of idList
+                repeat with i from 1 to remCount
+                    set remID to item i of idList
+                    set remName to item i of nameList
+                    set remList to item i of listList
+                    set isComp to item i of completedList
+                    set remPriority to item i of priorityList
+                    set rawDueDate to item i of dateList
+                    
                     set dueDateStr to "none"
                     try
-                        set dueDate to due date of r
-                        if dueDate is not missing value then
+                        if rawDueDate is not missing value then
+                            set dueDate to rawDueDate
                             set dueDateStr to (year of dueDate as string) & "-" & (my padZero(month of dueDate as integer)) & "-" & (my padZero(day of dueDate)) & "T" & (my padZero(hours of dueDate)) & ":" & (my padZero(minutes of dueDate)) & ":00"
                         end if
                     end try
-                    set output to output & remID & "|" & remList & "|" & remName & "|" & dueDateStr & "|" & isComp & "|" & remPriority & "\\n"
-                end if
-            end repeat
-            return output
+                    
+                    set end of reminderDataList to remID & "|" & remList & "|" & remName & "|" & dueDateStr & "|" & isComp & "|" & remPriority
+                end repeat
+            end if
         end tell
+        
+        set AppleScript's text item delimiters to "\n"
+        return reminderDataList as text
         
         on padZero(n)
             if n < 10 then
@@ -290,27 +320,42 @@ public actor RemindersService: RemindersServiceProtocol {
         let escapedQuery = query.replacingOccurrences(of: "\"", with: "\\\"")
         let script = """
         tell application "Reminders"
-            set output to ""
+            set reminderDataList to {}
             set searchQuery to "\(escapedQuery)"
-            repeat with r in reminders
-                if name of r contains searchQuery then
-                    set remID to id of r
-                    set remName to name of r
-                    set remList to name of container of r
-                    set isComp to completed of r
-                    set remPriority to priority of r
+            set matchingReminders to reminders whose name contains searchQuery
+            
+            if (count of matchingReminders) > 0 then
+                set idList to id of matchingReminders
+                set nameList to name of matchingReminders
+                set listList to name of container of matchingReminders
+                set completedList to completed of matchingReminders
+                set priorityList to priority of matchingReminders
+                 set dateList to due date of matchingReminders
+                
+                set remCount to count of idList
+                repeat with i from 1 to remCount
+                    set remID to item i of idList
+                    set remName to item i of nameList
+                    set remList to item i of listList
+                    set isComp to item i of completedList
+                    set remPriority to item i of priorityList
+                     set rawDueDate to item i of dateList
+                    
                     set dueDateStr to "none"
-                    try
-                        set dueDate to due date of r
-                        if dueDate is not missing value then
+                     try
+                        if rawDueDate is not missing value then
+                            set dueDate to rawDueDate
                             set dueDateStr to (year of dueDate as string) & "-" & (my padZero(month of dueDate as integer)) & "-" & (my padZero(day of dueDate)) & "T" & (my padZero(hours of dueDate)) & ":" & (my padZero(minutes of dueDate)) & ":00"
                         end if
                     end try
-                    set output to output & remID & "|" & remList & "|" & remName & "|" & dueDateStr & "|" & isComp & "|" & remPriority & "\\n"
-                end if
-            end repeat
-            return output
+                    
+                    set end of reminderDataList to remID & "|" & remList & "|" & remName & "|" & dueDateStr & "|" & isComp & "|" & remPriority
+                end repeat
+            end if
         end tell
+        
+        set AppleScript's text item delimiters to "\n"
+        return reminderDataList as text
         
         on padZero(n)
             if n < 10 then
