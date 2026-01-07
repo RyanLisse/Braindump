@@ -92,23 +92,17 @@ public actor RemindersService: RemindersServiceProtocol {
             end if
             
             if (count of targetReminders) > 0 then
-                set idList to id of targetReminders
-                set nameList to name of targetReminders
-                set listList to name of container of targetReminders
-                set completedList to completed of targetReminders
-                set priorityList to priority of targetReminders
-                -- due date list might contain 'missing value', which is tricky in lists but handleable
-                set dateList to due date of targetReminders
-                
-                set remCount to count of idList
+                set remCount to count of targetReminders
                 repeat with i from 1 to remCount
-                    set remID to item i of idList
-                    set remName to item i of nameList
-                    set remList to item i of listList
-                    set isComp to item i of completedList
-                    set remPriority to item i of priorityList
-                    set rawDueDate to item i of dateList
-                    
+                    set r to item i of targetReminders
+                    set remID to id of r
+                    set remName to name of r
+                    set remContainer to container of r
+                    set remList to name of remContainer
+                    set isComp to completed of r
+                    set remPriority to priority of r
+                    set rawDueDate to due date of r
+
                     set dueDateStr to "none"
                     try
                         if rawDueDate is not missing value then
@@ -325,24 +319,19 @@ public actor RemindersService: RemindersServiceProtocol {
             set matchingReminders to reminders whose name contains searchQuery
             
             if (count of matchingReminders) > 0 then
-                set idList to id of matchingReminders
-                set nameList to name of matchingReminders
-                set listList to name of container of matchingReminders
-                set completedList to completed of matchingReminders
-                set priorityList to priority of matchingReminders
-                 set dateList to due date of matchingReminders
-                
-                set remCount to count of idList
+                set remCount to count of matchingReminders
                 repeat with i from 1 to remCount
-                    set remID to item i of idList
-                    set remName to item i of nameList
-                    set remList to item i of listList
-                    set isComp to item i of completedList
-                    set remPriority to item i of priorityList
-                     set rawDueDate to item i of dateList
+                    set r to item i of matchingReminders
+                    set remID to id of r
+                    set remName to name of r
+                    set remContainer to container of r
+                    set remList to name of remContainer
+                    set isComp to completed of r
+                    set remPriority to priority of r
+                    set rawDueDate to due date of r
                     
                     set dueDateStr to "none"
-                     try
+                    try
                         if rawDueDate is not missing value then
                             set dueDate to rawDueDate
                             set dueDateStr to (year of dueDate as string) & "-" & (my padZero(month of dueDate as integer)) & "-" & (my padZero(day of dueDate)) & "T" & (my padZero(hours of dueDate)) & ":" & (my padZero(minutes of dueDate)) & ":00"
